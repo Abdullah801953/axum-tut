@@ -1,0 +1,47 @@
+Axum Rust ecosystem ka ek extremely popular, type-safe aur asynchronous web framework hai jise Tokio team ne develop kiya hai. Agar aap ek high-performance aur robust backend banana chahte hain, toh Axum aaj ke samay me industry standard ban chuka hai.Aaiye iske core reasons aur features ko ek-ek karke examples ke saath shuru se ant tak samajhte hain.1. No Routing Macros Required (Macro-Free Routing)Dusre web frameworks me aapko decorators ya macros (jaise #[get("/")]) use karne padte hain. Axum me aesa kuch nahi hai; yahan routes plain Rust functions aur standard routing methods hote hain. Isse code padhna aur refactor karna bohot aasan ho jata hai.Example:Rustuse axum::{routing::get, Router};
+
+#[tokio::main]
+async fn main() {
+    // Router define karna bina kisi magic macro ke
+    let app = Router::new().route("/", get(hello_handler));
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
+    axum::serve(listener, app).await.unwrap();
+}
+
+async fn hello_handler() -> &'static str {
+    "Hello from Axum!"
+}
+2. Tower Compatibility (Powerful Middleware)Axum tower::Service ke upar bana hai. Iska matlab yeh hai ki Tower aur tower-http ecosystem ke saare middlewares (jaise CORS, Compression, Tracing, Timeouts, Body Limits) bina kisi friction ke seedhe plug-in ho jaate hain.Example (CORS aur Tracing add karna):Rustuse axum::Router;
+use tower_http::cors::CorsLayer;
+
+let app = Router::new()
+    .layer(CorsLayer::permissive()) // CORS middleware seedha integrate ho gaya
+    ;
+3. Part of the Tokio ProjectAxum tokio-rs GitHub organization ke andar develop hota hai. Kyunki Tokio Rust ka sabse powerful aur widely used async runtime hai, isliye Axum ka integration Tokio ke saath native aur deeply optimized hota hai. Aapko async performance aur concurrency ki chinta karne ki zaroorat nahi padti.4. Type-Safe ExtractorsAxum me handler functions ke arguments batate hain ki unhe request se kya chahiye (jaise URL path parameters, query parameters, ya JSON body). Rust ka compiler check karta hai ki arguments sahi hain ya nahi, aur Axum request ko automatically un types me parse kar deta hai. Agar input match nahi hota, toh Axum khud-ba-खुद ek proper 4xx error return kar deta hai.Example (Path aur Json extractors):Rustuse axum::{
+    extract::Path,
+    routing::{get, post},
+    Json, Router,
+};
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+struct User {
+    name: String,
+    age: u8,
+}
+
+async fn get_user(Path(id): Path<u32>) -> String {
+    format!("Fetching user with ID: {}", id) // Path extractor se {id} mil gaya
+}
+
+async fn create_user(Json(payload): Json<User>) -> String {
+    format!("Created user {} of age {}", payload.name, payload.age) // Json extractor se body parse ho gayi
+}
+5. Readable Handler Errors (#[debug_handler])Rust me jab trait bounds match nahi karte, toh compiler errors kaafi lambe aur confusing ho sakte hain. Axum me agar aapka handler kisi trait ko satisfy nahi karta, toh #[debug_handler] macro us lambe error ko chhota karke seedha us offending argument ya return type par point out karta hai jisme galti hoti hai.Example:Rustuse axum::debug_handler;
+
+#[debug_handler]
+async fn my_handler(Path(id): Path<String>) -> String {
+    id
+}
+Axum 0.8: Ek Nazar Me (Features Table)FeatureAxum 0.8 DetailAsync RuntimeTokioMiddleware SystemTower / tower-httpMacro-free routingYesPath parameter syntax/{id}Native async traitsYes (Extractors ke liye #[async_trait] ki zaroorat nahi)WebSocket supportBuilt-in (behind the ws feature)HTTP/2 supportBehind the http2 featureOpenAPI generationutoipa aur utoipa-axum crates ke through

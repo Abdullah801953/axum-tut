@@ -1,0 +1,75 @@
+1. Project Initialization & Dependencies
+Node.js (Express)
+
+Node.js me aap npm init karke package.json banate hain aur Express install karte hain:
+Bash
+
+mkdir node-api && cd node-api
+npm init -y
+npm install express
+
+Axum (Rust)
+
+Rust me project create karne ke liye Cargo (Rust ka package manager & build system) ka use hota hai:
+Bash
+
+cargo new axum-api
+cd axum-api
+cargo add axum@0.8 tokio -F tokio/full
+
+    Fayda: cargo add automatically dependencies ko Cargo.toml me add karke download aur compile kar leta hai, bilkul npm install ki tarah. -F tokio/full ka matlab hai ki hum Tokio async runtime ke saare features enable kar rahe hain.
+
+2. Code Breakdown (src/main.rs)
+
+Rust me code hamesha main.fn se start hota hai. Yeh raha code aur iska har ek hissa Node.js se kaise milta-julta hai:
+Rust
+
+use axum::{Router, routing::get};
+
+#[tokio::main]
+async fn main() {
+    // 1. Router define karna
+    let app = Router::new().route("/", get(|| async { "Hello, World!" }));
+ 
+    // 2. TCP listener bind karna port 3000 par
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    println!("Listening on http://localhost:3000");
+    
+    // 3. Server start karna
+    axum::serve(listener, app).await.unwrap();
+}
+
+Key Concepts Comparison:
+
+    #[tokio::main] Macro:
+
+        Node.js: Event loop background me khud-ba-khud chalta hai.
+
+        Rust: Rust me asynchronous code chalane ke liye ek async runtime ki zaroorat hoti hai. #[tokio::main] hamare synchronous main() function ko ek async Tokio runtime par run kar deta hai.
+
+    Router::new().route(...):
+
+        Node.js (Express): app.get('/', (req, res) => res.send('Hello'))
+
+        Axum: Yahan get(...) ke andar ek inline async closure (|| async { ... }) pass kiya gaya hai jo bina kisi res.send() ke seedha string return kar raha hai. Axum khud samajh jata hai ki string ko HTTP response me kaise convert karna hai.
+
+    TcpListener & axum::serve:
+
+        Node.js (Express): app.listen(3000) sab kuch internally handle kar leta hai.
+
+        Axum: Axum thoda low-level control deta hai. Pehle hum ek TCP socket bind karte hain (TcpListener), aur phir us listener par Axum server (axum::serve) chalaate hain.
+
+3. Running and Testing
+
+Server ko run karne ke liye terminal me run karein:
+Bash
+
+cargo run
+
+(Yeh pehli baar compile hone me thoda waqt lega kyunki dependencies build ho rahi hain).
+
+Dusre terminal me test karne ke liye:
+Bash
+
+curl http://localhost:3000
+# Output => Hello, World!

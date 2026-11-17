@@ -1,0 +1,124 @@
+Routing Fundamentals ka matlab hota hai ki jab koi client (jaise browser ya curl) kisi HTTP method (GET, POST, PUT, DELETE) aur URL path (/, /about, /users/{id}) ke sath request bhejta hai, toh Axum server ko kaise pata chale ki kis function ko execute karna hai.
+
+Axum me routing bohot hi clean, type-safe aur macro-free hoti hai. Aaiye iske saare core concepts ko ek fully runnable example ke sath dekhte hain, jisme basic routes, method chaining, path parameters ({id} syntax), aur nested routers sabhi shamil hain.
+Step 1: Cargo.toml
+
+Apne project ki Cargo.toml file me yeh dependencies rakhein:
+Ini, TOML
+
+[package]
+name = "axum_routing_demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1.0", features = ["full"] }
+
+Step 2: Complete src/main.rs Code
+
+Yeh code routing ke saare main concepts (Basic routes, Method Chaining, Path Parameters, aur Nested Routers) ko cover karta hai:
+Rust
+
+use axum::{
+    extract::Path,
+    routing::{get, post},
+    Router,
+};
+
+// 1. Basic Handlers
+async fn home_handler() -> &'static str {
+    "Welcome to Home Page (GET /)"
+}
+
+async fn about_handler() -> &'static str {
+    "This is the About Page (GET /about)"
+}
+
+// 2. Handlers for Chained Methods (/users)
+async fn list_users_handler() -> &'static str {
+    "List of all users (GET /users)"
+}
+
+async fn create_user_handler() -> &'static str {
+    "User created successfully (POST /users)"
+}
+
+// 3. Path Parameter Handler (Axum 0.8 syntax: {id})
+async fn get_user_by_id_handler(Path(id): Path<u32>) -> String {
+    format!("Fetching user profile for ID: {} (GET /users/{{id}})", id)
+}
+
+// 4. Nested Router Handler (/api/v1/status)
+async fn api_status_handler() -> &'static str {
+    "API v1 is running smoothly (GET /api/v1/status)"
+}
+
+#[tokio::main]
+async fn main() {
+    // --- A. Sub-router for API nesting ---
+    let v1_router = Router::new()
+        .route("/status", get(api_status_handler));
+
+    // --- B. Main Router with Routing Fundamentals ---
+    let app = Router::new()
+        // 1. Basic Routes
+        .route("/", get(home_handler))
+        .route("/about", get(about_handler))
+        
+        // 2. Multiple Methods on One Route (Chaining)
+        .route("/users", get(list_users_handler).post(create_user_handler))
+        
+        // 3. Path Parameters (Axum 0.8 style: {id} instead of :id)
+        .route("/users/{id}", get(get_user_by_id_handler))
+        
+        // 4. Nested Routers using .nest()
+        .nest("/api/v1", v1_router);
+
+    // Bind and start the server
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
+    println!("Server started successfully at http://127.0.0.1:3000");
+
+    axum::serve(listener, app).await.unwrap();
+}
+
+Step 3: Run aur Test Kaise Karein?
+
+Terminal me run karein:
+Bash
+
+cargo run
+
+Ab dusre terminal me alag-alag routes ko test karne ke liye ye commands chalaayein:
+
+    Basic GET Route:
+    Bash
+
+    curl http://127.0.0.1:3000/
+    # Output: Welcome to Home Page (GET /)
+
+    Method Chaining (GET /users):
+    Bash
+
+    curl http://127.0.0.1:3000/users
+    # Output: List of all users (GET /users)
+
+    Method Chaining (POST /users):
+    Bash
+
+    curl -X POST http://127.0.0.1:3000/users
+    # Output: User created successfully (POST /users)
+
+    Path Parameter (/users/{id}) - Axum 0.8 Syntax:
+    Bash
+
+    curl http://127.0.0.1:3000/users/99
+    # Output: Fetching user profile for ID: 99 (GET /users/{id})
+
+    (Note: Axum 0.8 me : colon syntax jaise /users/:id allowed nahi hai aur server start hote hi panic/crash kar jayega. Hamesha {id} format use karna hota hai).
+
+    Nested Router (/api/v1/status):
+    Bash
+
+    curl http://127.0.0.1:3000/api/v1/status
+    # Output: API v1 is running smoothly (GET /api/v1/status)

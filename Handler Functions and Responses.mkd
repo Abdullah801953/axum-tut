@@ -1,0 +1,141 @@
+Handler Functions aur Responses Axum ka sabse core concept hain. Node.js (Express) ke comparison me yahan tarika bilkul alag hai.
+Node.js vs Axum: Response bhejne ka farak
+
+    Node.js (Express): Aapko response bhejne ke liye explicit res object ka use karna padta hai (jaise res.status(201).json({...}) ya res.send('Hello')).
+
+    Axum (Rust): Yahan aapko res object ki zaroorat nahi padti. Aapka handler function jo bhi return karta hai, agar wo IntoResponse trait implement karta hai, toh Axum khud-ba-khud use HTTP response me convert kar deta hai.
+
+Out-of-the-box Response Types
+
+Axum pehle se hi kaafi types ke liye IntoResponse support deta hai:
+
+    Plain Text: &'static str ya String
+
+    Status Code: StatusCode (jaise StatusCode::NOT_FOUND)
+
+    JSON: Json<T> (serde ke sath)
+
+    HTML: Html<&'static str>
+
+    Tuples: (StatusCode, Json<T>) (jaise 201 Created ke sath JSON data bhejna ho)
+
+Fully Runnable Example (Cargo.toml + src/main.rs)
+
+Neeche diya gaya code ek complete, ready-to-run project hai jisme alag-alag response types aur custom IntoResponse enum ka use kiya gaya hai.
+1. Cargo.toml
+Ini, TOML
+
+[package]
+name = "axum_responses_demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+2. src/main.rs
+Rust
+
+use axum::{
+    http::StatusCode,
+    response::{Html, IntoResponse, Response},
+    routing::get,
+    Json, Router,
+};
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct User {
+    id: u64,
+    name: String,
+}
+
+// 1. Plain Text Response
+async fn plain_handler() -> &'static str {
+    "Hello, Plain Text!"
+}
+
+// 2. Status Code Only Response
+async fn no_content_handler() -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+// 3. JSON Response
+async fn json_handler() -> Json<serde_json::Value> {
+    Json(serde_json::json!({ "message": "Hello JSON", "status": "success" }))
+}
+
+// 4. HTML Response
+async fn html_handler() -> Html<&'static str> {
+    Html("<h1>Hello from HTML Response!</h1>")
+}
+
+// 5. Tuple Response (StatusCode + JSON Body)
+async fn created_handler() -> (StatusCode, Json<serde_json::Value>) {
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "id": 1, "created": true })),
+    )
+}
+
+// 6. Custom Response Enum using IntoResponse (Bade APIs ke liye best practice)
+enum ApiResponse {
+    Ok,
+    JsonUsers(Vec<User>),
+}
+
+impl IntoResponse for ApiResponse {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Ok => StatusCode::OK.into_response(),
+            Self::JsonUsers(users) => (StatusCode::OK, Json(users)).into_response(),
+        }
+    }
+}
+
+async fn custom_enum_handler() -> ApiResponse {
+    let users = vec![
+        User { id: 1, name: "Alice".into() },
+        User { id: 2, name: "Bob".into() },
+    ];
+    ApiResponse::JsonUsers(users)
+}
+
+#[tokio::main]
+async fn main() {
+    let app = Router::new()
+        .route("/text", get(plain_handler))
+        .route("/nocontent", get(no_content_handler))
+        .route("/json", get(json_handler))
+        .route("/html", get(html_handler))
+        .route("/created", get(created_handler))
+        .route("/users", get(custom_enum_handler));
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
+    println!("Response demo server running at http://127.0.0.1:3000");
+
+    axum::serve(listener, app).await.unwrap();
+}
+
+Run aur Test Kaise Karein?
+
+Terminal me project run karein:
+Bash
+
+cargo run
+
+Dusre terminal me in endpoints ko test karein:
+
+    Plain Text: curl [http://127.0.0.1:3000/text](http://127.0.0.1:3000/text)
+
+    JSON: curl [http://127.0.0.1:3000/json](http://127.0.0.1:3000/json)
+
+    HTML: curl [http://127.0.0.1:3000/html](http://127.0.0.1:3000/html)
+
+    Tuple (Created): curl -i [http://127.0.0.1:3000/created](http://127.0.0.1:3000/created) ( -i flag se aap HTTP status 201 Created dekh sakte hain)
+
+    Custom Enum Users: curl [http://127.0.0.1:3000/users](http://127.0.0.1:3000/users)
+
