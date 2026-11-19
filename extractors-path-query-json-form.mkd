@@ -1,0 +1,147 @@
+Extractors Axum ka ek sabse powerful feature hain. Inka kaam incoming HTTP request se data (jaise URL path, query parameters, JSON body, ya Form data) ko nikal kar directly handler function ke arguments me pass karna hota hai.
+
+Sabse badi khasiat ye hai ki ye sab kuch automatically aur type-safe tarike se hota hai. Agar extraction fail ho jaye (jaise number ki jagah text aa jaye ya JSON malformed ho), toh Axum handler chalne se pehle hi client ko 4xx error (jaise 400 Bad Request) bhej deta hai.
+
+Aaiye is topic ke har ek hisse ko Node.js (Express) ke sath compare karke aur ek fully runnable example ke sath detail me samajhte hain.
+1. Path Parameters (Path)
+
+URL ke andar jo variables hote hain (jaise /users/{id}), unhe extract karne ke liye Path extractor use hota hai. Axum 0.8 me {id} syntax use hota hai.
+
+    Node.js (Express): req.params.id (yeh hamesha string hota hai, number me convert karne ke liye parseInt() karna padta hai).
+
+    Axum: Aap seedha Path(id): Path<u64> likh dete hain. Axum khud string ko u64 me parse karta hai aur agar koi galat value bheje toh automatic 400 Bad Request throw kar deta hai.
+
+2. Query Parameters (Query)
+
+URL me ?page=2&per_page=50 jaise query strings ko read karne ke liye Query extractor aur serde::Deserialize ka use hota hai.
+
+    Node.js (Express): req.query.page
+
+    Axum: Ek struct banate hain jis par #[derive(Deserialize)] laga hota hai, aur Query(pagination): Query<Pagination> se data nikal lete hain.
+
+3. JSON Body (Json) aur Form Data (Form)
+
+POST ya PUT requests me jab client JSON ya HTML form bhejta hai, toh Json ya Form extractor body ko parse karke directly Rust ke struct me map kar deta hai.
+
+    Important Rule: Json extractor ke liye client ko request header me Content-Type: application/json bhejna zaroori hai, warna Axum 415 Unsupported Media Type error dega.
+
+4. Multiple Extractors & Golden Rule
+
+Aap ek handler me multiple extractors combine kar sakte hain, lekin sabse zaroori rule ye hai:
+
+    Request body ko consume karne wala extractor (jaise Json ya Form) hamesha aakhri (last) parameter hona chahiye. Kyunki HTTP request body ko sirf ek hi baar read kiya ja sakta hai.
+
+5. Fully Runnable Example (Cargo.toml + src/main.rs)
+
+Neeche ek complete, ready-to-run project diya gaya hai jisme Path, Query, JSON, aur Multiple Extractors sabhi ko ek sath implement kiya gaya hai.
+Step 1: Cargo.toml
+Ini, TOML
+
+[package]
+name = "axum_extractors_demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+
+Step 2: src/main.rs
+Rust
+
+use axum::{
+    extract::{Path, Query, Json},
+    routing::{get, post},
+    Router,
+};
+use serde::Deserialize;
+
+// 1. Query parameters ke liye struct
+#[derive(Deserialize, Debug)]
+struct Pagination {
+    page: Option<u32>,
+    per_page: Option<u32>,
+}
+
+// 2. JSON Body ke liye struct
+#[derive(Deserialize, Debug)]
+struct CreateUser {
+    name: String,
+    email: String,
+}
+
+// --- Handlers using Extractors ---
+
+// A. Single Path Parameter Handler (GET /users/{id})
+async fn get_user(Path(id): Path<u64>) -> String {
+    format!("User Profile -> ID: #{id}")
+}
+
+// B. Multiple Path Parameters Handler (GET /posts/{post_id}/comments/{comment_id})
+async fn get_comment(Path((post_id, comment_id)): Path<(u64, u64)>) -> String {
+    format!("Post ID: {post_id}, Comment ID: {comment_id}")
+}
+
+// C. Query Parameters Handler (GET /items?page=2&per_page=50)
+async fn list_items(Query(pagination): Query<Pagination>) -> String {
+    let page = pagination.page.unwrap_or(1);
+    let per_page = pagination.per_page.unwrap_or(20);
+    format!("Displaying Page {page} with {per_page} items per page.")
+}
+
+// D. JSON Body Handler (POST /users)
+async fn create_user(Json(input): Json<CreateUser>) -> String {
+    format!("User Created Successfully! Name: {}, Email: {}", input.name, input.email)
+}
+
+#[tokio::main]
+async fn main() {
+    // Router definition mapping routes to extractors handlers
+    let app = Router::new()
+        .route("/users/{id}", get(get_user))
+        .route("/posts/{post_id}/comments/{comment_id}", get(get_comment))
+        .route("/items", get(list_items))
+        .route("/users", post(create_user));
+
+    // Bind and start the server
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
+    println!("Extractors demo server running at http://127.0.0.1:3000");
+
+    axum::serve(listener, app).await.unwrap();
+}
+
+Step 3: Run aur Test Kaise Karein?
+
+Terminal me project run karein:
+Bash
+
+cargo run
+
+Ab dusre terminal me in endpoints ko test karein:
+
+    Path Parameter Test:
+    Bash
+
+    curl http://127.0.0.1:3000/users/105
+    # Output: User Profile -> ID: #105
+
+    Multiple Path Parameters Test:
+    Bash
+
+    curl http://127.0.0.1:3000/posts/42/comments/7
+    # Output: Post ID: 42, Comment ID: 7
+
+    Query Parameters Test:
+    Bash
+
+    curl "http://127.0.0.1:3000/items?page=3&per_page=10"
+    # Output: Displaying Page 3 with 10 items per page.
+
+    JSON Body Test (POST):
+    Bash
+
+    curl -X POST http://127.0.0.1:3000/users \
+      -H "Content-Type: application/json" \
+      -d '{"name": "Mohmmad Abdullah", "email": "abdullah@example.com"}'
+    # Output: User Created Successfully! Name: Mohmmad Abdullah, Email: abdullah@example.com
